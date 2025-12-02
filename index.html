@@ -367,6 +367,47 @@
             align-items: center;
             z-index: 999;
         }
+
+        /* 左下角背景切換小面板 */
+        .bg-switcher {
+            position: fixed;
+            left: 16px;
+            bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.45);
+            border: 2px solid rgba(255, 255, 255, 0.85);
+            box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
+            color: #FFFDE7;
+            font-size: 12px;
+            z-index: 200;
+            backdrop-filter: blur(8px);
+        }
+
+        .bg-switcher-label {
+            font-weight: 700;
+            letter-spacing: 0.06em;
+        }
+
+        .bg-switcher-select {
+            border: none;
+            outline: none;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-family: inherit;
+            background: #FFEB3B;
+            color: #3E2723;
+            box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+            cursor: pointer;
+        }
+
+        .bg-switcher-select:focus {
+            outline: 2px solid rgba(255, 255, 255, 0.9);
+        }
     </style>
 </head>
 
@@ -391,16 +432,43 @@
 
     </div>
 
+    <!-- 背景主題切換，下方左側固定 -->
+    <div class="bg-switcher">
+        <span class="bg-switcher-label">背景主題</span>
+        <select id="bgMode" class="bg-switcher-select">
+            <option value="auto">自動（依天氣）</option>
+            <option value="weather-sunny">晴天藍天綠地</option>
+            <option value="weather-cloudy">多雲陰天</option>
+            <option value="weather-rainy">雨天</option>
+            <option value="weather-storm">雷雨</option>
+            <option value="weather-night">夜晚星空</option>
+            <option value="weather-default">預設</option>
+        </select>
+    </div>
+
     <script>
         const API_URL = "https://pa-weather.zeabur.app/api/weather/kaohsiung";
 
+        // 目前的天氣描述＆背景模式
+        let currentWeatherDesc = "";
+        let currentBgMode = "auto";
+
+        const BG_CLASSES = [
+            "weather-sunny",
+            "weather-cloudy",
+            "weather-rainy",
+            "weather-storm",
+            "weather-night",
+            "weather-default"
+        ];
+
         function getWeatherIcon(weather) {
             if (!weather) return "🌤️";
-            if (weather.includes("晴")) return "☀️";
+            if (weather.includes("雷")) return "⛈️";
+            if (weather.includes("雨")) return "🌧️";
             if (weather.includes("多雲")) return "⛅";
             if (weather.includes("陰")) return "☁️";
-            if (weather.includes("雨")) return "🌧️";
-            if (weather.includes("雷")) return "⛈️";
+            if (weather.includes("晴")) return "☀️";
             return "🌤️";
         }
 
@@ -434,10 +502,40 @@
             return "深夜";
         }
 
+        // 從文字描述推一個對應的 weather class
+        function getWeatherClassFromDesc(desc) {
+            const text = desc || "";
+            const hour = new Date().getHours();
+            const isNight = hour >= 18 || hour < 5;
+
+            if (text.includes("雷")) return "weather-storm";
+            if (text.includes("雨")) return "weather-rainy";
+            if (text.includes("陰") || text.includes("多雲")) return "weather-cloudy";
+            if (text.includes("晴")) return isNight ? "weather-night" : "weather-sunny";
+            return isNight ? "weather-night" : "weather-default";
+        }
+
+        // 根據 currentBgMode + currentWeatherDesc 套用背景
+        function applyBackground() {
+            const body = document.body;
+            body.classList.remove(...BG_CLASSES);
+
+            if (currentBgMode === "auto") {
+                const cls = getWeatherClassFromDesc(currentWeatherDesc);
+                body.classList.add(cls);
+            } else {
+                body.classList.add(currentBgMode);
+            }
+        }
+
         function renderWeather(data) {
             const forecasts = data.forecasts;
             const current = forecasts[0];
             const others = forecasts.slice(1);
+
+            // 記錄目前天氣給背景用
+            currentWeatherDesc = current.weather;
+            applyBackground();
 
             // 1. 渲染 Hero Card (主畫面)
             const advice = getAdvice(current.rain, current.maxTemp);
@@ -445,53 +543,50 @@
             const avgTemp = Math.round((parseInt(current.maxTemp) + parseInt(current.minTemp)) / 2);
 
             document.getElementById('heroCard').innerHTML = `
-                        <div class="hero-card">
-                            <div class="hero-period">${period}</div>
-                            <div class="hero-temp-container">
-                                <div class="hero-icon">${getWeatherIcon(current.weather)}</div>
-                                <div class="hero-temp">${avgTemp}°</div>
-                            </div>
-                            <div class="hero-desc">${current.weather}</div>
-                            
-                            <div class="advice-grid">
-                                <div class="advice-item">
-                                    <div class="advice-icon">${advice.rainIcon}</div>
-                                    <div class="advice-text">${advice.rainText}</div>
-                                    <div style="font-size:0.7rem; color:#999">降雨率 ${current.rain}</div>
-                                </div>
-                                <div class="advice-item">
-                                    <div class="advice-icon">${advice.clothIcon}</div>
-                                    <div class="advice-text">${advice.clothText}</div>
-                                    <div style="font-size:0.7rem; color:#999">最高溫 ${current.maxTemp}°</div>
-                                </div>
-                            </div>
+                <div class="hero-card">
+                    <div class="hero-period">${period}</div>
+                    <div class="hero-temp-container">
+                        <div class="hero-icon">${getWeatherIcon(current.weather)}</div>
+                        <div class="hero-temp">${avgTemp}°</div>
+                    </div>
+                    <div class="hero-desc">${current.weather}</div>
+                    
+                    <div class="advice-grid">
+                        <div class="advice-item">
+                            <div class="advice-icon">${advice.rainIcon}</div>
+                            <div class="advice-text">${advice.rainText}</div>
+                            <div style="font-size:0.7rem; color:#999">降雨率 ${current.rain}</div>
                         </div>
-                    `;
+                        <div class="advice-item">
+                            <div class="advice-icon">${advice.clothIcon}</div>
+                            <div class="advice-text">${advice.clothText}</div>
+                            <div style="font-size:0.7rem; color:#999">最高溫 ${current.maxTemp}°</div>
+                        </div>
+                    </div>
+                </div>
+            `;
 
             // 2. 渲染稍後預報 (包含明天判斷)
             const scrollContainer = document.getElementById('futureForecasts');
             scrollContainer.innerHTML = '';
 
-            // 抓今天的日期數字 (例如 24)
             const todayDate = new Date().getDate();
 
             others.forEach(f => {
                 let p = getTimePeriod(f.startTime);
-
-                // 判斷該預報的日期是否跟今天不同，不同就是明天
                 const fDate = new Date(f.startTime);
                 if (fDate.getDate() !== todayDate) {
                     p = "明天" + p;
                 }
 
                 scrollContainer.innerHTML += `
-                            <div class="mini-card">
-                                <div class="mini-time">${p}</div>
-                                <div class="mini-icon">${getWeatherIcon(f.weather)}</div>
-                                <div class="mini-temp">${f.minTemp}° - ${f.maxTemp}°</div>
-                                <div style="font-size:0.8rem; color:#888; margin-top:5px;">💧${f.rain}</div>
-                            </div>
-                        `;
+                    <div class="mini-card">
+                        <div class="mini-time">${p}</div>
+                        <div class="mini-icon">${getWeatherIcon(f.weather)}</div>
+                        <div class="mini-temp">${f.minTemp}° - ${f.maxTemp}°</div>
+                        <div style="font-size:0.8rem; color:#888; margin-top:5px;">💧${f.rain}</div>
+                    </div>
+                `;
             });
 
             // 3. 右上角顯示今日日期
@@ -506,20 +601,12 @@
 
         async function fetchWeather() {
             try {
-                // 1. 定義「最低等待時間」：1500 毫秒 (1.5秒)
                 const delayPromise = new Promise(resolve => setTimeout(resolve, 1500));
-
-                // 2. 定義「抓取資料」的工作
                 const fetchPromise = fetch(API_URL).then(res => res.json());
-
-                // 3. Promise.all 會等待「兩個都完成」才會往下走
-                // result 陣列裡，第一個是 delay 的結果(沒用到)，第二個是 api 的 json 資料
                 const [_, json] = await Promise.all([delayPromise, fetchPromise]);
 
                 if (json.success) {
                     renderWeather(json.data);
-
-                    // 資料處理好後，隱藏 Loading，顯示主畫面
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('mainContent').style.display = 'block';
                 } else {
@@ -531,8 +618,19 @@
             }
         }
 
-        document.addEventListener("DOMContentLoaded", fetchWeather);
+        document.addEventListener("DOMContentLoaded", () => {
+            fetchWeather();
+
+            const select = document.getElementById("bgMode");
+            if (select) {
+                select.addEventListener("change", (e) => {
+                    currentBgMode = e.target.value;
+                    applyBackground();
+                });
+            }
+        });
     </script>
+
 </body>
 
 </html>
